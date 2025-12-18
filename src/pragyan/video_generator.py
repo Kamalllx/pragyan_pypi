@@ -99,16 +99,40 @@ class VideoGenerator:
     ) -> str:
         """Generate complete Manim scene code"""
         
-        # Escape strings for Python code
+        # Escape strings for Python code - handle special characters carefully
         def escape_str(s: str) -> str:
             if not s:
                 return ""
-            return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
+            # Remove problematic characters and escape for Python string
+            result = s.replace('\\', '\\\\')  # Escape backslashes first
+            result = result.replace('"', '\\"')  # Escape quotes
+            result = result.replace("'", "\\'")  # Escape single quotes
+            result = result.replace('\n', ' ')   # Replace newlines with spaces
+            result = result.replace('\r', '')    # Remove carriage returns
+            result = result.replace('\t', ' ')   # Replace tabs with spaces
+            # Remove any non-printable characters
+            result = ''.join(c for c in result if c.isprintable() or c == ' ')
+            return result
+        
+        # Clean code for display - keep structure but escape properly
+        def escape_code(s: str) -> str:
+            if not s:
+                return ""
+            # For code, we want to preserve newlines as literal \\n for the Code class
+            result = s.replace('\\', '\\\\')
+            result = result.replace('"', '\\"')
+            result = result.replace("'", "\\'")
+            result = result.replace('\r', '')
+            # Convert actual newlines to escaped newlines
+            result = result.replace('\n', '\\n')
+            # Remove any non-printable characters except spaces
+            result = ''.join(c for c in result if c.isprintable() or c in ' ')
+            return result
         
         title = escape_str(question.title)
         concept = escape_str(solution.concept)
         approach = escape_str(solution.approach)
-        code = escape_str(solution.code)
+        code = escape_code(solution.code) if solution.code else "# No code available"
         time_comp = escape_str(solution.time_complexity)
         space_comp = escape_str(solution.space_complexity)
         explanation = escape_str(solution.explanation[:500] if solution.explanation else "")
@@ -117,7 +141,7 @@ class VideoGenerator:
         # Get topics
         topics = analysis.get("topics", [])
         if isinstance(topics, list):
-            topics_str = ", ".join(topics[:5])
+            topics_str = ", ".join(str(t) for t in topics[:5])
         else:
             topics_str = str(topics)
         topics_str = escape_str(topics_str)
@@ -126,7 +150,7 @@ class VideoGenerator:
         steps = solution.step_by_step[:6] if solution.step_by_step else []
         steps_code = "[\n"
         for step in steps:
-            steps_code += f'            "{escape_str(step)}",\n'
+            steps_code += f'            "{escape_str(str(step))}",\n'
         steps_code += "        ]"
         
         scene_code = f'''"""
@@ -363,17 +387,31 @@ class DSAExplanation(Scene):
         ).to_edge(UP, buff=0.3)
         
         # Code display (limit lines for readability)
-        code_lines = code_text.split("\\\\n")[:20]
-        display_code = "\\n".join(code_lines)
+        # Handle both escaped and actual newlines
+        if "\\n" in code_text:
+            code_lines = code_text.split("\\n")[:20]
+        else:
+            code_lines = code_text.split("\\\\n")[:20]
+        display_code = "\\n".join(line.strip() for line in code_lines if line.strip())
         
-        code = Code(
-            code_string=display_code,
-            language="python",
-            font_size=14,
-            background="rectangle",
-            background_stroke_color=GREEN,
-            line_spacing=0.6,
-        ).scale(0.7).next_to(header, DOWN, buff=0.4)
+        # Fallback to simple text if Code class fails
+        try:
+            code = Code(
+                code_string=display_code,
+                language="python",
+                font_size=14,
+                background="rectangle",
+                background_stroke_color=GREEN,
+                line_spacing=0.6,
+            ).scale(0.7).next_to(header, DOWN, buff=0.4)
+        except Exception:
+            # Fallback: use simple Text for code display
+            code = Text(
+                display_code[:500],
+                font="Monospace",
+                font_size=14,
+                color=WHITE
+            ).scale(0.7).next_to(header, DOWN, buff=0.4)
         
         self.play(Write(header), run_time=0.8)
         self.play(FadeIn(code), run_time=1.5)

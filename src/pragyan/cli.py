@@ -17,6 +17,7 @@ from rich.prompt import Prompt, Confirm
 
 from pragyan.models import ProgrammingLanguage, VideoConfig
 from pragyan.main import Pragyan
+from pragyan.logger import get_logger, PragyanLogger
 
 
 console = Console()
@@ -372,50 +373,81 @@ def interactive():
         output_dir=Path.home() / "Downloads"
     )
     
-    console.print("\n[bold green]Starting processing...[/bold green]\n")
+    # Initialize logger for detailed output
+    logger = get_logger(verbose=True)
+    logger.start_session()
     
-    # Process
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Processing...", total=None)
+    console.print("\n")
+    
+    try:
+        # Initialize Pragyan
+        pragyan = Pragyan(
+            provider=provider,
+            api_key=api_key,
+            video_config=video_config
+        )
         
-        try:
-            pragyan = Pragyan(
-                provider=provider,
-                api_key=api_key,
-                video_config=video_config
+        # Scrape/Parse question
+        if input_type == "url":
+            logger.log_scraping_start(input_value)
+            question = pragyan.scrape_question(input_value)
+        else:
+            logger.log_info("Parsing provided problem text...")
+            question = pragyan.parse_question(input_value)
+        
+        # Log scraped data
+        examples = question.examples if hasattr(question, 'examples') and question.examples else []
+        logger.log_scraped_question(
+            title=question.title,
+            description=question.description[:500] if question.description else "",
+            difficulty=question.difficulty,
+            examples=examples
+        )
+        
+        # Analyze
+        logger.log_analysis_start()
+        analysis = pragyan.analyze(question)
+        logger.log_analysis_result(analysis)
+        
+        # Generate solution
+        logger.log_solving_start(language.value)
+        solution = pragyan.solve(question, language, analysis)
+        logger.log_solution_generated(solution)
+        
+        # Log step by step
+        if solution.step_by_step:
+            logger.log_step_by_step(solution.step_by_step)
+        
+        # Log example walkthrough as test case simulation
+        if solution.example_walkthrough:
+            example_input = "See problem examples"
+            example_output = "Computed result"
+            if question.examples and len(question.examples) > 0:
+                example_input = question.examples[0][:50] if len(question.examples[0]) > 50 else question.examples[0]
+            logger.log_test_case_simulation(
+                test_input=example_input,
+                expected_output=example_output,
+                walkthrough=solution.example_walkthrough
             )
-            
-            if input_type == "url":
-                progress.update(task, description="Scraping question...")
-                question = pragyan.scrape_question(input_value)
-            else:
-                question = pragyan.parse_question(input_value)
-            
-            progress.update(task, description="Analyzing...")
-            analysis = pragyan.analyze(question)
-            
-            progress.update(task, description="Generating solution...")
-            solution = pragyan.solve(question, language, analysis)
-            
-            video_path = None
-            if generate_video:
-                progress.update(task, description="Generating video...")
-                try:
-                    video_path = pragyan.generate_video(question, solution, analysis)
-                except Exception as e:
-                    console.print(f"\n[yellow]Video generation failed: {e}[/yellow]")
-            
-            progress.update(task, description="[bold green]✓ Done![/bold green]")
-            
-        except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
-            sys.exit(1)
+        
+        # Generate video
+        video_path = None
+        if generate_video:
+            logger.log_video_generation_start()
+            try:
+                video_path = pragyan.generate_video(question, solution, analysis)
+                logger.log_video_complete(str(video_path))
+            except Exception as e:
+                logger.log_video_error(str(e))
+        
+        logger.log_completion()
+        
+    except Exception as e:
+        logger.log_error("processing", str(e))
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
     
-    # Display results
+    # Display final results
     console.print("\n")
     console.print(Panel(
         Syntax(solution.code, language.value, theme="monokai", line_numbers=True, word_wrap=True),

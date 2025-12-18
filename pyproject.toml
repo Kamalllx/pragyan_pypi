@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pragyan"
-version = "1.0.3"
+version = "1.0.4"
 description = "AI-powered DSA question solver with video explanations using Manim animations"
 readme = "README.md"
 license = "MIT"
@@ -68,10 +68,10 @@ dev = [
 pragyan = "pragyan.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/kamalllx/pragyan"
-Documentation = "https://github.com/kamalllx/pragyan#readme"
-Repository = "https://github.com/kamalllx/pragyan"
-Issues = "https://github.com/kamalllx/pragyan/issues"
+Homepage = "https://github.com/Kamalllx/pragyan_pypi"
+Documentation = "https://github.com/Kamalllx/pragyan_pypi#readme"
+Repository = "https://github.com/Kamalllx/pragyan_pypi"
+Issues = "https://github.com/Kamalllx/pragyan_pypi/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
