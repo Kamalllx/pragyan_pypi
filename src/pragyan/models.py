@@ -164,9 +164,9 @@ class LLMConfig:
         """Set default model based on provider"""
         if self.model is None:
             if self.provider == LLMProvider.GEMINI:
-                self.model = "gemini-2.0-flash"
+                self.model = "gemini-3.0-pro-preview"
             elif self.provider == LLMProvider.GROQ:
-                self.model = "llama-3.3-70b-versatile"
+                self.model = "openai/gpt-oss-120b"
 
 
 @dataclass 

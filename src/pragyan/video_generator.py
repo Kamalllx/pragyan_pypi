@@ -147,6 +147,22 @@ config.background_color = "{self.config.background_color}"
 class DSAExplanation(Scene):
     """Complete DSA explanation video scene"""
     
+    def clear_scene(self):
+        """Safely clear all mobjects from scene using Group instead of VGroup"""
+        if self.mobjects:
+            # Filter to only VMobjects for VGroup, use Group for mixed types
+            vmobjects = [m for m in self.mobjects if isinstance(m, VMobject)]
+            other_mobjects = [m for m in self.mobjects if not isinstance(m, VMobject)]
+            
+            animations = []
+            if vmobjects:
+                animations.append(FadeOut(VGroup(*vmobjects)))
+            if other_mobjects:
+                animations.append(FadeOut(Group(*other_mobjects)))
+            
+            if animations:
+                self.play(*animations, run_time=0.8)
+    
     def construct(self):
         """Build the complete video"""
         self.camera.background_color = "{self.config.background_color}"
@@ -218,7 +234,7 @@ class DSAExplanation(Scene):
             self.play(FadeIn(topics_text, shift=UP), run_time=0.8)
         
         self.wait(2)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def problem_scene(self, title: str, explanation: str):
         """Problem overview scene"""
@@ -248,7 +264,7 @@ class DSAExplanation(Scene):
         self.play(FadeIn(exp_text), run_time=1.5)
         
         self.wait(3)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def concept_scene(self, concept: str, approach: str):
         """Explain the main concept"""
@@ -291,7 +307,7 @@ class DSAExplanation(Scene):
         self.play(FadeIn(approach_header), FadeIn(approach_text), run_time=1.5)
         
         self.wait(4)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def steps_scene(self, steps: list):
         """Show step-by-step approach"""
@@ -335,7 +351,7 @@ class DSAExplanation(Scene):
             self.wait(0.5)
         
         self.wait(2)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def code_scene(self, code_text: str):
         """Show the solution code"""
@@ -368,7 +384,7 @@ class DSAExplanation(Scene):
         self.play(FadeOut(highlight), run_time=0.5)
         
         self.wait(4)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def example_scene(self, walkthrough: str):
         """Example walkthrough scene"""
@@ -393,7 +409,7 @@ class DSAExplanation(Scene):
         self.play(Write(walk_text), run_time=3)
         
         self.wait(4)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def complexity_scene(self, time_comp: str, space_comp: str):
         """Complexity analysis scene"""
@@ -442,7 +458,7 @@ class DSAExplanation(Scene):
         )
         
         self.wait(3)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=0.8)
+        self.clear_scene()
     
     def outro_scene(self, title: str):
         """Outro scene"""
@@ -472,7 +488,7 @@ class DSAExplanation(Scene):
         self.play(FadeIn(generated), run_time=0.5)
         
         self.wait(2)
-        self.play(FadeOut(VGroup(*self.mobjects)), run_time=1)
+        self.clear_scene()
     
     @staticmethod
     def wrap_text(text: str, width: int) -> str:

@@ -300,7 +300,7 @@ def solve_from_url(
     url: str,
     language: str = "python",
     provider: str = "gemini",
-    api_key: str = None,
+    api_key: Optional[str] = None,
     generate_video: bool = True
 ) -> Dict[str, Any]:
     """
@@ -316,13 +316,17 @@ def solve_from_url(
     Returns:
         Result dictionary
     """
+    resolved_key: str
     if not api_key:
         import os
-        api_key = os.environ.get("PRAGYAN_API_KEY")
-        if not api_key:
+        env_key = os.environ.get("PRAGYAN_API_KEY")
+        if not env_key:
             raise ValueError("API key required. Set PRAGYAN_API_KEY environment variable or pass api_key parameter.")
+        resolved_key = env_key
+    else:
+        resolved_key = api_key
     
-    pragyan = Pragyan(provider=provider, api_key=api_key)
+    pragyan = Pragyan(provider=provider, api_key=resolved_key)
     return pragyan.process(url, language, generate_video)
 
 
@@ -330,7 +334,7 @@ def solve_from_text(
     text: str,
     language: str = "python",
     provider: str = "gemini",
-    api_key: str = None,
+    api_key: Optional[str] = None,
     generate_video: bool = True
 ) -> Dict[str, Any]:
     """
@@ -346,11 +350,15 @@ def solve_from_text(
     Returns:
         Result dictionary
     """
+    resolved_key: str
     if not api_key:
         import os
-        api_key = os.environ.get("PRAGYAN_API_KEY")
-        if not api_key:
+        env_key = os.environ.get("PRAGYAN_API_KEY")
+        if not env_key:
             raise ValueError("API key required. Set PRAGYAN_API_KEY environment variable or pass api_key parameter.")
+        resolved_key = env_key
+    else:
+        resolved_key = api_key
     
-    pragyan = Pragyan(provider=provider, api_key=api_key)
+    pragyan = Pragyan(provider=provider, api_key=resolved_key)
     return pragyan.process(text, language, generate_video)

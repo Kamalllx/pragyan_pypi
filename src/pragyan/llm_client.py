@@ -119,14 +119,16 @@ class GeminiClient(BaseLLMClient):
             import google.generativeai as genai
             genai.configure(api_key=config.api_key)
             
-            generation_config = {
-                "temperature": config.temperature,
-                "max_output_tokens": config.max_tokens,
-                "response_mime_type": "text/plain",
-            }
+            generation_config = genai.GenerationConfig(
+                temperature=config.temperature,
+                max_output_tokens=config.max_tokens,
+            )
+            
+            # Ensure model name is set
+            model_name = config.model or "gemini-2.0-flash"
             
             self.model = genai.GenerativeModel(
-                model_name=config.model,
+                model_name=model_name,
                 generation_config=generation_config,
             )
         except ImportError:
@@ -169,14 +171,18 @@ class GroqClient(BaseLLMClient):
         
         messages.append({"role": "user", "content": prompt})
         
+        # Ensure model name is set
+        model_name = self.config.model or "llama-3.3-70b-versatile"
+        
         response = self.client.chat.completions.create(
-            model=self.config.model,
+            model=model_name,
             messages=messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
         
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return content if content else ""
     
     def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
         """Generate a JSON response using Groq"""

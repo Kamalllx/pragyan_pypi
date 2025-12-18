@@ -373,7 +373,7 @@ class RecursionTreeScene(Scene):
         # Helper function to create children
         def create_node(val, parent_pos, direction):
             node = Circle(radius=0.35, color=RED, fill_opacity=0.3)
-            label = Text(f"fib({val})", font_size=14, color=WHITE)
+            label = Text(f"fib({{val}})", font_size=14, color=WHITE)
             label.move_to(node.get_center())
             
             offset = LEFT * 1.5 if direction == "left" else RIGHT * 1.5
@@ -612,7 +612,7 @@ class StackQueueScene(Scene):
 '''
 
 
-def get_animation_template(algorithm_type: str, **kwargs) -> str:
+def get_animation_template(algorithm_type: str, **kwargs) -> Optional[str]:
     """
     Get the appropriate animation template for an algorithm
     
@@ -621,7 +621,7 @@ def get_animation_template(algorithm_type: str, **kwargs) -> str:
         **kwargs: Additional parameters for the template
         
     Returns:
-        Manim code string
+        Manim code string or None if no template found
     """
     templates = AnimationTemplates()
     

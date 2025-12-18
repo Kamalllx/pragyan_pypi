@@ -246,9 +246,10 @@ def solve(url, text, language, provider, api_key, no_video, output_dir, quality)
     # Solution
     console.print("\n")
     console.print(Panel(
-        Syntax(solution.code, lang.value, theme="monokai", line_numbers=True),
+        Syntax(solution.code, lang.value, theme="monokai", line_numbers=True, word_wrap=True),
         title=f"[bold green]Solution ({lang.value})[/bold green]",
-        border_style="green"
+        border_style="green",
+        expand=True
     ))
     
     # Explanation
@@ -417,9 +418,10 @@ def interactive():
     # Display results
     console.print("\n")
     console.print(Panel(
-        Syntax(solution.code, language.value, theme="monokai", line_numbers=True),
+        Syntax(solution.code, language.value, theme="monokai", line_numbers=True, word_wrap=True),
         title=f"[bold green]Solution ({language.value})[/bold green]",
-        border_style="green"
+        border_style="green",
+        expand=True
     ))
     
     console.print("\n")
