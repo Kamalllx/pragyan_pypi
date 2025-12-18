@@ -367,7 +367,7 @@ class DSAExplanation(Scene):
         display_code = "\\n".join(code_lines)
         
         code = Code(
-            code=display_code,
+            code_string=display_code,
             language="python",
             font_size=14,
             background="rectangle",
