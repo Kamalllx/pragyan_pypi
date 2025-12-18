@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+---
+
+## [1.0.5] - 2024-12-18
+
+### 🎬 Major Video Overhaul
+- **Complete rewrite of video generator** with proper Manim animations
+- **Visual data structure representations**: Arrays with boxes, values, and indices
+- **Algorithm-specific animations**:
+  - Two-pointer technique with animated L/R pointers
+  - Sliding window with moving yellow highlight
+  - Binary search with range narrowing visualization
+  - Hash map operations with key-value boxes
+  - Stack/queue push-pop animations
+  - Dynamic programming table building
+- **Complexity graphs**: Visual O(1), O(log n), O(n), O(n²) curves
+- **Algorithm icons**: Visual representations for each technique
+- **Smart algorithm detection**: Auto-detects algorithm type from solution
+
+### 🐛 Bug Fixes
+- **Fixed code duplication bug**: Solutions no longer show repeated code blocks
+- Added deduplication logic to clean LLM responses
+- Improved prompt engineering to prevent repetition
+
+### 📚 Documentation
+- Added highlighted `pip install pragyan` at top of README
+- Added quick start code snippets for Python and CLI usage
+- Improved installation visibility
+
+---
+
+## [1.0.4] - 2024-12-17
+
+### Added
+- **Verbose logging system** with real-time progress updates
+- New `logger.py` module with Rich console output
+- Step-by-step feedback during solving process
+- Professional README with ASCII architecture diagrams
+
+### Fixed
+- Fixed repository URLs in pyproject.toml
+- Improved error handling and user feedback
+
+---
+
+## [1.0.3] - 2024-12-17
+
+### Fixed
+- Fixed Manim Code parameter compatibility issue
+- Removed `code_style` parameter causing errors
+
+---
+
+## [1.0.2] - 2024-12-17
+
+### Fixed
+- Fixed VGroup import error in video generation
+- Corrected Manim imports for animation components
+
+---
+
+## [1.0.1] - 2024-12-17
+
+### Fixed
+- Fixed JSON parsing for LLM responses
+- Improved error handling for malformed JSON
+
+---
+
 ## [1.0.0] - 2024-12-17
 
 ### Added

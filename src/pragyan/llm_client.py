@@ -257,7 +257,8 @@ Provide your analysis in the following JSON format:
         """Generate a complete solution for the DSA question"""
         system_prompt = """You are an expert competitive programmer and coding instructor.
 Generate clean, efficient, and well-documented code solutions.
-Always include detailed comments explaining the logic."""
+Always include detailed comments explaining the logic.
+IMPORTANT: Do NOT repeat or duplicate any code. Generate the solution only once."""
         
         lang_name = language.value
         
@@ -269,22 +270,27 @@ Always include detailed comments explaining the logic."""
 
 Provide your solution in the following JSON format:
 {{
-    "code": "The complete, working code solution with comments",
+    "code": "The complete, working code solution with comments. DO NOT DUPLICATE CODE - write each line only once.",
     "explanation": "Detailed explanation of the solution",
-    "time_complexity": "O(?) with explanation",
-    "space_complexity": "O(?) with explanation",
-    "concept": "Main concept/technique used",
-    "approach": "Step-by-step approach description",
+    "time_complexity": "O(?) with brief explanation",
+    "space_complexity": "O(?) with brief explanation",
+    "concept": "Main concept/technique used (one sentence)",
+    "approach": "Step-by-step approach description (2-3 sentences)",
     "step_by_step": ["Step 1: ...", "Step 2: ...", ...],
     "example_walkthrough": "Detailed walkthrough of Example 1 showing how the algorithm works"
 }}
 
+CRITICAL: The code field must contain the solution exactly ONCE. No repetition or duplication.
 Make sure the code is complete, syntactically correct, and follows best practices for {lang_name}."""
         
         result = self.generate_json(prompt, system_prompt)
         
+        # Clean the code - remove any accidental duplications
+        code = result.get("code", "")
+        code = self._deduplicate_code(code)
+        
         return Solution(
-            code=result.get("code", ""),
+            code=code,
             language=language,
             explanation=result.get("explanation", ""),
             time_complexity=result.get("time_complexity", ""),
@@ -294,6 +300,56 @@ Make sure the code is complete, syntactically correct, and follows best practice
             step_by_step=result.get("step_by_step", []),
             example_walkthrough=result.get("example_walkthrough", ""),
         )
+    
+    def _deduplicate_code(self, code: str) -> str:
+        """Remove accidentally duplicated code blocks"""
+        if not code:
+            return code
+        
+        lines = code.split('\n')
+        if len(lines) < 10:
+            return code
+        
+        # Check if the code is duplicated (same block appears twice)
+        half = len(lines) // 2
+        first_half = '\n'.join(lines[:half])
+        second_half = '\n'.join(lines[half:])
+        
+        # If the halves are very similar (allowing for minor differences)
+        if first_half.strip() == second_half.strip():
+            return first_half
+        
+        # Check for triple or more repetition
+        third = len(lines) // 3
+        if third > 5:
+            first_third = '\n'.join(lines[:third])
+            second_third = '\n'.join(lines[third:2*third])
+            if first_third.strip() == second_third.strip():
+                return first_third
+        
+        # Look for repeated patterns at line level
+        seen_sequences = {}
+        result_lines = []
+        i = 0
+        
+        while i < len(lines):
+            # Take a window of 5 lines as a "block"
+            window_size = min(5, len(lines) - i)
+            window = tuple(lines[i:i+window_size])
+            
+            window_key = '\n'.join(window).strip()
+            
+            if window_key and len(window_key) > 50:  # Only check substantial blocks
+                if window_key in seen_sequences:
+                    # Skip this repeated block
+                    i += window_size
+                    continue
+                seen_sequences[window_key] = True
+            
+            result_lines.append(lines[i])
+            i += 1
+        
+        return '\n'.join(result_lines)
     
     def generate_video_script(
         self, 

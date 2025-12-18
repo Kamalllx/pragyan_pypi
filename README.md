@@ -2,6 +2,43 @@
 
 **AI-Powered DSA Question Solver with Video Explanations**
 
+---
+
+## 🚀 Quick Install
+
+```bash
+pip install pragyan
+```
+
+---
+
+## ⚡ Quick Start
+
+### In Your Python Script
+
+```python
+from pragyan import Pragyan
+
+# Initialize with your API key
+solver = Pragyan(api_key="your-gemini-api-key")
+
+# Solve from LeetCode URL
+result = solver.solve("https://leetcode.com/problems/two-sum/", language="python")
+print(result.solution.code)
+```
+
+### From Terminal
+
+```bash
+# Interactive mode (recommended)
+pragyan interactive
+
+# Quick solve from URL
+pragyan solve "https://leetcode.com/problems/two-sum/" --video
+```
+
+---
+
 Pragyan is a Python package that helps developers understand and solve Data Structures and Algorithms (DSA) problems. It leverages AI to analyze problems, generate optimized solutions, and create animated explanation videos.
 
 ---
