@@ -10,6 +10,89 @@ from abc import ABC, abstractmethod
 from pragyan.models import LLMProvider, LLMConfig, Question, Solution, ProgrammingLanguage
 
 
+def _clean_and_parse_json(response: str) -> Dict[str, Any]:
+    """
+    Clean LLM response and parse as JSON with robust error handling.
+    Handles control characters, markdown code blocks, and common issues.
+    """
+    # Strip whitespace
+    response = response.strip()
+    
+    # Remove markdown code blocks
+    if response.startswith("```json"):
+        response = response[7:]
+    if response.startswith("```"):
+        response = response[3:]
+    if response.endswith("```"):
+        response = response[:-3]
+    
+    response = response.strip()
+    
+    # Try parsing as-is first
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        pass
+    
+    # Remove control characters except for those inside strings
+    # First, find the first { and last }
+    start_idx = response.find('{')
+    end_idx = response.rfind('}')
+    
+    if start_idx == -1 or end_idx == -1:
+        # Try to find array brackets
+        start_idx = response.find('[')
+        end_idx = response.rfind(']')
+    
+    if start_idx != -1 and end_idx != -1:
+        response = response[start_idx:end_idx + 1]
+    
+    # Replace problematic control characters within string values
+    # Handle unescaped newlines and tabs in strings
+    def escape_string_content(match):
+        content = match.group(1)
+        # Escape control characters
+        content = content.replace('\n', '\\n')
+        content = content.replace('\r', '\\r')
+        content = content.replace('\t', '\\t')
+        content = content.replace('\b', '\\b')
+        content = content.replace('\f', '\\f')
+        return f'"{content}"'
+    
+    # This regex finds string values and escapes control chars inside them
+    try:
+        # First attempt: try to fix common issues
+        cleaned = response
+        
+        # Replace literal newlines that might be in the middle of strings
+        # by using a more aggressive approach
+        cleaned = re.sub(r'(?<!\\)\n(?=.*?")', '\\n', cleaned)
+        cleaned = re.sub(r'(?<!\\)\r(?=.*?")', '\\r', cleaned)
+        cleaned = re.sub(r'(?<!\\)\t(?=.*?")', '\\t', cleaned)
+        
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    
+    # More aggressive cleaning: remove all control characters
+    try:
+        # Remove all control characters except spaces
+        cleaned = ''.join(char if ord(char) >= 32 or char in '\n\r\t' else ' ' for char in response)
+        # Then normalize whitespace within strings
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    
+    # Last resort: try to extract and rebuild JSON manually
+    try:
+        # Very aggressive: just keep valid JSON characters
+        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', response)
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Failed to parse JSON response: {str(e)}\nResponse was: {response[:500]}...")
+
+
 class BaseLLMClient(ABC):
     """Abstract base class for LLM clients"""
     
@@ -63,16 +146,7 @@ class GeminiClient(BaseLLMClient):
         json_prompt = f"{prompt}\n\nRespond ONLY with valid JSON, no markdown code blocks or extra text."
         response = self.generate(json_prompt, system_prompt)
         
-        # Clean up the response to extract JSON
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-        
-        return json.loads(response.strip())
+        return _clean_and_parse_json(response)
 
 
 class GroqClient(BaseLLMClient):
@@ -111,16 +185,7 @@ class GroqClient(BaseLLMClient):
         
         response = self.generate(prompt, json_system)
         
-        # Clean up the response to extract JSON
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-        
-        return json.loads(response.strip())
+        return _clean_and_parse_json(response)
 
 
 class LLMClient:
