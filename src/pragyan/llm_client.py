@@ -302,7 +302,7 @@ Make sure the code is complete, syntactically correct, and follows best practice
         )
     
     def _deduplicate_code(self, code: str) -> str:
-        """Remove accidentally duplicated code blocks"""
+        """Remove accidentally duplicated code blocks - handles sliding window repetition"""
         if not code:
             return code
         
@@ -310,46 +310,113 @@ Make sure the code is complete, syntactically correct, and follows best practice
         if len(lines) < 10:
             return code
         
-        # Check if the code is duplicated (same block appears twice)
+        # Method 1: Find the first complete code block (class/function definition to its end)
+        # Look for common code patterns
+        code_start = -1
+        brace_count = 0
+        indent_stack = []
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            
+            # Find start of main code block
+            if code_start == -1:
+                if stripped.startswith(('class ', 'def ', 'function ', 'public ', 'private ', 'int ', 'void ')):
+                    code_start = i
+                    if stripped.endswith(':'):
+                        # Python-style - track by indentation
+                        indent_stack = [len(line) - len(line.lstrip())]
+                    continue
+            
+            # Once we found the start, look for where the main block ends
+            if code_start >= 0 and i > code_start:
+                current_indent = len(line) - len(line.lstrip()) if stripped else -1
+                
+                # If we see the same or similar line as earlier in the code, we might have repetition
+                # Check if this line matches a line from the beginning of the code block
+                for j in range(code_start, min(code_start + 30, i)):
+                    if lines[j].strip() == stripped and stripped and len(stripped) > 20:
+                        # Found a repeat - return everything up to here
+                        # But make sure we have a complete block
+                        candidate = '\n'.join(lines[:i])
+                        if self._is_complete_code(candidate):
+                            return candidate
+        
+        # Method 2: Check for exact half/third duplication
         half = len(lines) // 2
         first_half = '\n'.join(lines[:half])
         second_half = '\n'.join(lines[half:])
         
-        # If the halves are very similar (allowing for minor differences)
         if first_half.strip() == second_half.strip():
             return first_half
         
-        # Check for triple or more repetition
-        third = len(lines) // 3
-        if third > 5:
-            first_third = '\n'.join(lines[:third])
-            second_third = '\n'.join(lines[third:2*third])
-            if first_third.strip() == second_third.strip():
-                return first_third
+        # Method 3: Find repeating suffix pattern
+        # The pattern shows lines repeating with increasing offsets
+        # Find where the code logically ends (look for main block or example usage)
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if 'Example usage' in line or 'if __name__' in stripped:
+                # Include this and maybe one more line, then stop
+                end_idx = min(i + 5, len(lines))
+                for j in range(i + 1, end_idx):
+                    if not lines[j].strip():
+                        continue
+                    # Check if what follows is a repeat
+                    remaining = '\n'.join(lines[j:])
+                    main_code = '\n'.join(lines[:j])
+                    if any(lines[j].strip() == lines[k].strip() for k in range(code_start if code_start >= 0 else 0, min(j, 20))):
+                        return main_code
         
-        # Look for repeated patterns at line level
-        seen_sequences = {}
-        result_lines = []
-        i = 0
+        # Method 4: Track unique lines and stop at first repeat of a significant line
+        seen_lines = {}
+        result = []
         
-        while i < len(lines):
-            # Take a window of 5 lines as a "block"
-            window_size = min(5, len(lines) - i)
-            window = tuple(lines[i:i+window_size])
+        for i, line in enumerate(lines):
+            stripped = line.strip()
             
-            window_key = '\n'.join(window).strip()
+            # Skip empty lines and comments for uniqueness check
+            if not stripped or stripped.startswith('#') or stripped.startswith('//'):
+                result.append(line)
+                continue
             
-            if window_key and len(window_key) > 50:  # Only check substantial blocks
-                if window_key in seen_sequences:
-                    # Skip this repeated block
-                    i += window_size
-                    continue
-                seen_sequences[window_key] = True
+            # For substantial lines, check if we've seen them
+            if len(stripped) > 30:
+                if stripped in seen_lines:
+                    # We've hit a repeat - stop here
+                    # But first, make sure the code so far is complete
+                    candidate = '\n'.join(result)
+                    if self._is_complete_code(candidate):
+                        return candidate
+                seen_lines[stripped] = i
             
-            result_lines.append(lines[i])
-            i += 1
+            result.append(line)
         
-        return '\n'.join(result_lines)
+        return '\n'.join(result)
+    
+    def _is_complete_code(self, code: str) -> bool:
+        """Check if code appears to be complete (balanced braces, has return, etc.)"""
+        if not code.strip():
+            return False
+        
+        # Check for balanced braces/brackets
+        opens = code.count('{') + code.count('[') + code.count('(')
+        closes = code.count('}') + code.count(']') + code.count(')')
+        
+        # Allow small imbalance for incomplete strings
+        if abs(opens - closes) > 2:
+            return False
+        
+        # Check it has some substance
+        lines = [l for l in code.split('\n') if l.strip()]
+        if len(lines) < 5:
+            return False
+        
+        # Check for common endings
+        last_lines = '\n'.join(lines[-3:]).lower()
+        if any(x in last_lines for x in ['return', 'true', 'false', 'none', 'null', '}']):
+            return True
+        
+        return len(lines) >= 10
     
     def generate_video_script(
         self, 
