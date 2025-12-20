@@ -500,3 +500,75 @@ The class should inherit from Scene and have a construct method.
 Use manim.community edition syntax."""
 
         return self.generate(prompt, system_prompt)
+    
+    def generate_algorithm_animation_steps(
+        self, 
+        question: Question, 
+        solution: Solution,
+        analysis: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate detailed step-by-step animation instructions for algorithm execution"""
+        system_prompt = """You are an expert at analyzing algorithms and creating step-by-step execution traces.
+For each algorithm, provide detailed steps showing exactly how it executes on the given input.
+Focus on visualization - what changes at each step, what should be highlighted, what values to show."""
+        
+        prompt = f"""Analyze this algorithm and generate detailed animation steps:
+
+PROBLEM:
+Title: {question.title}
+Description: {question.description[:500]}
+Examples: {question.examples}
+
+SOLUTION:
+Concept: {solution.concept}
+Approach: {solution.approach}
+Code: {solution.code}
+
+ANALYSIS:
+{json.dumps(analysis, indent=2)}
+
+Generate a detailed step-by-step execution trace in JSON format:
+{{
+    "algorithm_type": "sorting | backtracking | graph | tree | array | etc",
+    "visualization_type": "board | array | tree | graph | etc",
+    "initial_state": {{
+        "description": "Initial setup description",
+        "data": [...array/board/etc...],
+        "metadata": {{"key": "value"}}
+    }},
+    "steps": [
+        {{
+            "step_number": 1,
+            "action": "compare | swap | place | remove | highlight | etc",
+            "description": "What happens in this step",
+            "state_changes": {{
+                "positions": [0, 1],
+                "values": [...],
+                "highlights": ["green", "red"],
+                "markers": {{"pointer": "left", "position": 0}}
+            }},
+            "visual_cues": ["highlight_position", "draw_line", etc],
+            "narration": "Explain what's happening for voice-over"
+        }}
+    ],
+    "final_state": {{
+        "description": "Final state description",
+        "data": [...final array/board/etc...],
+        "result": "Solution/answer"
+    }},
+    "key_moments": [
+        {{
+            "step": 5,
+            "importance": "high",
+            "description": "Key insight or turning point"
+        }}
+    ]
+}}
+
+Make it detailed enough that someone could implement the exact visualization from your description.
+Include at least 10-20 meaningful steps for non-trivial algorithms.
+For backtracking algorithms (like N-Queens), show placement AND backtracking steps.
+For sorting, show every comparison and swap.
+For graph algorithms, show the traversal order with queue/stack states."""
+        
+        return self.generate_json(prompt, system_prompt)

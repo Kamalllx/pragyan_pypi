@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from pragyan.models import Question, Solution, VideoConfig, AnimationScene
+from pragyan.algorithm_visualizers import get_visualizer_for_problem
 
 
 class VideoGenerator:
@@ -25,6 +26,12 @@ class VideoGenerator:
         self.config = config or VideoConfig()
         self._temp_dir = None
         self._verify_manim_installation()
+        self.llm_client = None  # Can be set later for LLM-powered animations
+        self._scene_class_name = "DSAExplanation"  # Track which scene class to render
+    
+    def set_llm_client(self, llm_client):
+        """Set LLM client for advanced animation generation"""
+        self.llm_client = llm_client
     
     def _verify_manim_installation(self):
         """Verify that Manim is properly installed"""
@@ -53,15 +60,31 @@ class VideoGenerator:
         question: Question,
         solution: Solution,
         analysis: Dict[str, Any],
-        video_script: List[Dict[str, Any]],
+        video_script: Optional[List[Dict[str, Any]]] = None,
         output_filename: Optional[str] = None
     ) -> Path:
         temp_dir = self._get_temp_dir()
-        scene_code = self._generate_animated_scene(question, solution, analysis)
+        
+        # Always use LLM to generate dynamic, problem-specific animation code
+        if self.llm_client:
+            scene_code, self._scene_class_name = self._generate_dynamic_scene(
+                question, solution, analysis
+            )
+        else:
+            # Fallback to generic animated scene if no LLM
+            scene_code = self._generate_animated_scene(question, solution, analysis)
+            self._scene_class_name = "DSAExplanation"
+        
         scene_file = temp_dir / "dsa_explanation.py"
         with open(scene_file, "w", encoding="utf-8") as f:
             f.write(scene_code)
-        output_path = self._render_video(scene_file, output_filename)
+        
+        # Debug: save a copy of the generated code (silent)
+        debug_file = Path.cwd() / "last_generated_scene.py"
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write(scene_code)
+        
+        output_path = self._render_video(scene_file, output_filename, self._scene_class_name)
         return output_path
     
     def _escape_for_python(self, s: str, max_len: int = 500) -> str:
@@ -143,9 +166,260 @@ class VideoGenerator:
             return "sorting"
         elif any(x in concept for x in ["graph"]):
             return "graph"
+        elif any(x in concept for x in ["backtrack", "n-queen", "queen"]):
+            return "backtracking"
         elif "array" in topics or "string" in topics:
             return "array"
         return "array"
+    
+    def _generate_dynamic_scene(
+        self,
+        question: Question,
+        solution: Solution,
+        analysis: Dict[str, Any]
+    ) -> tuple:
+        """
+        Use LLM to generate complete, dynamic Manim scene code for the specific problem.
+        This creates a unique visualization tailored to the exact algorithm and problem.
+        
+        Returns:
+            tuple: (scene_code, scene_class_name)
+        """
+        # Detect algorithm type for better prompting
+        algo_type = self._detect_algorithm_type(analysis, solution)
+        
+        # Get example from question
+        example_input = ""
+        if question.examples:
+            ex = question.examples[0]
+            if isinstance(ex, dict):
+                example_input = str(ex.get("input", ""))
+            else:
+                example_input = str(ex)
+        
+        # Build comprehensive prompt for LLM
+        prompt = f'''Generate a complete Manim Community Edition scene that creates an educational video explaining this algorithm.
+
+PROBLEM: {question.title}
+DESCRIPTION: {question.description[:800]}
+EXAMPLE INPUT: {example_input}
+
+SOLUTION APPROACH: {solution.concept}
+ALGORITHM TYPE: {algo_type}
+TIME COMPLEXITY: {solution.time_complexity}
+SPACE COMPLEXITY: {solution.space_complexity}
+
+SOLUTION CODE:
+```
+{solution.code[:1500] if solution.code else "# No code provided"}
+```
+
+CRITICAL: THE VIDEO MUST BE 60-120 SECONDS LONG. Use longer run_time values and more self.wait() calls.
+
+REQUIREMENTS FOR THE VIDEO (60-120 seconds MINIMUM):
+1. **INTRO (10-15 seconds)**: 
+   - Animated title with problem name (run_time=2)
+   - Brief problem statement explanation with Text animations (run_time=3)
+   - Show the example input visually (run_time=3)
+   - self.wait(2) after each section
+
+2. **ALGORITHM EXPLANATION (15-20 seconds)**:
+   - Explain the approach/strategy being used step by step
+   - Show key insight or pattern with visual diagrams
+   - List each step of the algorithm with bullet animations
+   - Use run_time=2-3 for each animation
+   - self.wait(1.5) between explanations
+
+3. **STEP-BY-STEP VISUALIZATION (30-50 seconds)** - THIS IS THE MAIN PART:
+   - Create appropriate visual representation for the data structures
+   - Show EACH step of the algorithm executing with SLOW animations (run_time=1.5-2.5)
+   - Use colors: BLUE for current, GREEN for done, RED for backtrack/invalid, YELLOW for comparing
+   - Add status text showing what's happening at each step
+   - Include counters (comparisons, iterations, etc.)
+   - self.wait(1) after each major step
+   - For loops/iterations, show at least 3-5 iterations with full animation
+
+4. **RESULT & COMPLEXITY (10-15 seconds)**:
+   - Show final answer/solution with celebration animation (run_time=2)
+   - Display Time and Space complexity in nice boxes (run_time=2)
+   - Key takeaways (3 bullet points, each with run_time=1.5)
+   - self.wait(2) after result
+
+5. **OUTRO (5-8 seconds)**:
+   - "Generated by Pragyan" branding with fade animation
+   - self.wait(3) at the end
+
+ANIMATION TIMING REQUIREMENTS (CRITICAL):
+- NEVER use run_time less than 1.0 for any animation
+- Use run_time=2.0 to 3.0 for important animations (title, explanations)
+- Use run_time=1.5 for step-by-step visualizations
+- Add self.wait(1.0) to self.wait(2.0) between each major section
+- Add self.wait(0.5) between small animations within a section
+- Total animation time MUST exceed 60 seconds
+
+MANIM CODE REQUIREMENTS:
+- Use `from manim import *`
+- Class must be named `AlgorithmScene` and extend `Scene`
+- Use these colors: GOLD, BLUE, GREEN, RED, YELLOW, WHITE, GRAY, PURPLE
+- Keep text readable: title 36-48px, body 18-24px
+- Position elements clearly - use `.to_edge()`, `.shift()`, `.next_to()`
+- Make it visually engaging with smooth transitions
+
+CRITICAL - TEXT RENDERING:
+- ONLY use `Text()` for ALL text - NEVER use `Tex()`, `MathTex()`, or any LaTeX
+- For math symbols, write them as plain text: "O(n²)" not "$O(n^2)$"
+- Use `Text("x * y")` not `MathTex("x \\times y")`
+- This is required because LaTeX is not installed
+
+Generate ONLY the Python code, no markdown, no explanation. Start with `from manim import *`'''
+
+        system_prompt = """You are an expert Manim animator who creates beautiful, educational algorithm visualization videos.
+You write clean, working Manim Community Edition code that produces engaging 45-90 second educational videos.
+Always include proper intro, step-by-step algorithm visualization, and complexity analysis.
+Make the visualizations dynamic and educational - show the algorithm actually running, not just static slides.
+Your code must be syntactically correct and render without errors.
+IMPORTANT: Never use Tex, MathTex, or any LaTeX - only use Text() for all text rendering."""
+
+        try:
+            # Generate code from LLM
+            raw_response = self.llm_client.generate(prompt, system_prompt)
+            
+            # Clean the response - extract just the Python code
+            scene_code = self._extract_manim_code(raw_response)
+            
+            # Add config header
+            final_code = f'''"""
+Dynamically generated Manim scene by Pragyan
+Problem: {self._escape_for_python(question.title, 100)}
+Generated using LLM-powered visualization
+"""
+
+from manim import *
+import numpy as np
+
+config.pixel_height = {self.config.pixel_height}
+config.pixel_width = {self.config.pixel_width}
+config.frame_rate = {self.config.fps}
+config.background_color = "{self.config.background_color}"
+
+'''
+            # Add the generated scene code (removing duplicate imports if present)
+            scene_code_cleaned = scene_code.replace("from manim import *", "").strip()
+            scene_code_cleaned = scene_code_cleaned.replace("import numpy as np", "").strip()
+            
+            final_code += scene_code_cleaned
+            
+            return final_code, "AlgorithmScene"
+            
+        except Exception as e:
+            # LLM scene generation failed, fall back silently
+            return self._generate_animated_scene(question, solution, analysis), "DSAExplanation"
+    
+    def _extract_manim_code(self, response: str) -> str:
+        """Extract clean Manim code from LLM response"""
+        # Remove markdown code blocks
+        code = response.strip()
+        
+        if "```python" in code:
+            code = code.split("```python")[1]
+            if "```" in code:
+                code = code.split("```")[0]
+        elif "```" in code:
+            parts = code.split("```")
+            if len(parts) >= 2:
+                code = parts[1]
+        
+        code = code.strip()
+        
+        # Ensure it starts with from manim import * if not present
+        if not code.startswith("from manim"):
+            code = "from manim import *\n\n" + code
+        
+        # CRITICAL: Replace Tex/MathTex with Text to avoid LaTeX dependency
+        # This handles cases where LLM ignores the instruction
+        code = re.sub(r'\bTex\s*\(', 'Text(', code)
+        code = re.sub(r'\bMathTex\s*\(', 'Text(', code)
+        # Remove LaTeX-specific arguments that Text doesn't support
+        code = re.sub(r',\s*tex_environment\s*=\s*["\'][^"\']*["\']', '', code)
+        code = re.sub(r',\s*tex_template\s*=\s*[^,\)]+', '', code)
+        # Clean up LaTeX syntax in strings (basic conversion)
+        code = code.replace(r'\times', '×')
+        code = code.replace(r'\cdot', '·')
+        code = code.replace(r'\leq', '≤')
+        code = code.replace(r'\geq', '≥')
+        code = code.replace(r'\neq', '≠')
+        code = code.replace(r'\rightarrow', '→')
+        code = code.replace(r'\leftarrow', '←')
+        
+        return code
+
+    def _generate_specialized_scene(
+        self,
+        question: Question,
+        solution: Solution,
+        analysis: Dict[str, Any],
+        visualizer,
+        kwargs: Dict[str, Any]
+    ) -> tuple:
+        """Generate a scene using specialized algorithm visualizer
+        
+        Returns:
+            tuple: (scene_code, scene_class_name)
+        """
+        
+        # Get the algorithm-specific animation code
+        algorithm_scene_code = visualizer.generate_manim_code(**kwargs)
+        
+        # Extract the scene class name from the generated code
+        import re
+        class_match = re.search(r'class\s+(\w+Scene)\s*\(Scene\)', algorithm_scene_code)
+        scene_class_name = class_match.group(1) if class_match else "DSAExplanation"
+        
+        # Build the complete scene file with just the algorithm scene
+        # The algorithm scene already has all the visualization logic
+        scene_code = f'''"""
+Manim scene for DSA explanation video - Generated by Pragyan
+Algorithm-specific visualization: {scene_class_name}
+"""
+
+from manim import *
+import numpy as np
+import textwrap
+
+config.pixel_height = {self.config.pixel_height}
+config.pixel_width = {self.config.pixel_width}
+config.frame_rate = {self.config.fps}
+config.background_color = "{self.config.background_color}"
+
+'''
+        
+        # Combine header with the algorithm-specific scene code
+        final_code = scene_code + algorithm_scene_code
+        
+        return final_code, scene_class_name
+    
+    def _generate_llm_powered_scene(
+        self,
+        question: Question,
+        solution: Solution,
+        analysis: Dict[str, Any]
+    ) -> str:
+        """Generate a scene using LLM to create custom animations"""
+        if not self.llm_client:
+            return self._generate_animated_scene(question, solution, analysis)
+        
+        try:
+            # Get detailed animation steps from LLM
+            animation_steps = self.llm_client.generate_algorithm_animation_steps(
+                question, solution, analysis
+            )
+            
+            # TODO: Convert animation steps to Manim code
+            # For now, fallback to generic
+            return self._generate_animated_scene(question, solution, analysis)
+        except Exception:
+            # Silent fallback
+            return self._generate_animated_scene(question, solution, analysis)
     
     def _generate_animated_scene(
         self,
@@ -529,8 +803,14 @@ class DSAExplanation(Scene):
         
         return scene_header + scene_body
     
-    def _render_video(self, scene_file: Path, output_filename: Optional[str] = None) -> Path:
-        """Render the Manim scene to video"""
+    def _render_video(self, scene_file: Path, output_filename: Optional[str] = None, scene_class_name: str = "DSAExplanation") -> Path:
+        """Render the Manim scene to video
+        
+        Args:
+            scene_file: Path to the Python file containing the Manim scene
+            output_filename: Optional custom output filename
+            scene_class_name: Name of the Scene class to render (e.g., 'NQueensScene', 'BubbleSortScene')
+        """
         quality_map = {
             "low_quality": "-ql",
             "medium_quality": "-qm",
@@ -543,7 +823,7 @@ class DSAExplanation(Scene):
             "manim",
             quality_flag,
             str(scene_file),
-            "DSAExplanation",
+            scene_class_name,  # Use the actual algorithm scene class name
             "--media_dir", str(self._get_temp_dir() / "media"),
         ]
         
@@ -579,3 +859,53 @@ class DSAExplanation(Scene):
             raise RuntimeError("Video rendering timed out after 5 minutes")
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {str(e)}")
+
+
+class SimpleVideoGenerator:
+    """Fallback video generator using MoviePy"""
+    
+    def __init__(self, config: Optional[VideoConfig] = None):
+        self.config = config or VideoConfig()
+    
+    def generate_slideshow(
+        self,
+        question: Question,
+        solution: Solution,
+        analysis: Dict[str, Any]
+    ) -> Path:
+        try:
+            from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
+        except ImportError:
+            raise ImportError("MoviePy not installed. Install with: pip install moviepy")
+        
+        clips = []
+        duration = 5
+        bg_color = tuple(int(self.config.background_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        
+        for title, content in [
+            (question.title, "DSA Problem Solution"),
+            ("Concept", solution.concept),
+            ("Approach", solution.approach[:300]),
+            ("Complexity", f"Time: {solution.time_complexity}\nSpace: {solution.space_complexity}"),
+        ]:
+            bg = ColorClip(
+                size=(self.config.pixel_width, self.config.pixel_height),
+                color=bg_color, duration=duration
+            )
+            title_clip = TextClip(
+                title, fontsize=60, color='white', font='Arial-Bold',
+                method='caption', size=(self.config.pixel_width - 100, None)
+            ).set_position(('center', 100)).set_duration(duration)
+            content_clip = TextClip(
+                content, fontsize=36, color='lightgray', font='Arial',
+                method='caption', size=(self.config.pixel_width - 150, None)
+            ).set_position(('center', 'center')).set_duration(duration)
+            clips.append(CompositeVideoClip([bg, title_clip, content_clip]))
+        
+        final_video = concatenate_videoclips(clips, method="compose")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = self.config.output_dir / f"pragyan_solution_{timestamp}.mp4"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        final_video.write_videofile(str(output_path), fps=self.config.fps, codec="libx264", audio=False, verbose=False, logger=None)
+        
+        return output_path

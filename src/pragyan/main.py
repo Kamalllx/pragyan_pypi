@@ -77,6 +77,8 @@ class Pragyan:
         """Get or create the video generator"""
         if self._video_generator is None:
             self._video_generator = VideoGenerator(self.video_config)
+            # Connect LLM client for advanced animations
+            self._video_generator.set_llm_client(self.llm)
         return self._video_generator
     
     @property
@@ -193,11 +195,9 @@ class Pragyan:
                 question, solution, analysis
             )
         
-        # Generate video script
-        video_script = self.solver.get_video_script(question, solution, analysis)
-        
+        # Dynamic scene generation handles everything - no need for video_script
         return self.video_generator.generate_video(
-            question, solution, analysis, video_script, output_filename
+            question, solution, analysis, output_filename=output_filename
         )
     
     def process(
